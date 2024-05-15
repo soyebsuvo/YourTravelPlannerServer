@@ -10,19 +10,19 @@ const openai = new OpenAI({ apiKey: process.env.OPEN_AI_API_KEY });
 
 // Serve static files from the 'public' directory
 // app.use(express.static('public'));
-const corsOptions = {
-  origin: "*", // List of allowed origins
-  methods: ["GET", "POST", "DELETE", "PUT", "PATCH"], // List of allowed HTTP methods
-  allowedHeaders: [
-    "Content-Type",
-    "Authorization",
-    "Access-Control-Allow-Origin",
-  ], // List of allowed headers
-  headers: "*",
-  credentials: true,
-};
+// const corsOptions = {
+//   origin: "*", // List of allowed origins
+//   methods: ["GET", "POST", "DELETE", "PUT", "PATCH"], // List of allowed HTTP methods
+//   allowedHeaders: [
+//     "Content-Type",
+//     "Authorization",
+//     "Access-Control-Allow-Origin",
+//   ], // List of allowed headers
+//   headers: "*",
+//   credentials: true,
+// };
 app.use(express.json());
-app.use(cors(corsOptions));
+app.use(cors());
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*"); // Allow requests from all origins (for testing)
   next();
