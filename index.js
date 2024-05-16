@@ -24,8 +24,8 @@ const openai = new OpenAI({ apiKey: process.env.OPEN_AI_API_KEY });
 
 const corsConfig = {
   origin: ['http://localhost:5173'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  credentials : true
   }
   app.use(cors(corsConfig));
   app.use(express.json());
