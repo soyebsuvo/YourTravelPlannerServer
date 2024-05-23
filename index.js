@@ -6,7 +6,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 const OpenAI = require("openai");
 
-// asst_J1jsylicOUuL1ILcXLsXTGeH
+//
 
 const openai = new OpenAI({ apiKey: process.env.OPEN_AI_API_KEY });
 
@@ -24,14 +24,14 @@ const openai = new OpenAI({ apiKey: process.env.OPEN_AI_API_KEY });
 //   credentials: true,
 // };
 
-const corsConfig = {
-  origin: ["http://localhost:5173"],
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-  // credentials: true,
+const corsOptions = {
+  origin: "*",
+  credentials: true,
   optionSuccessStatus: 200,
-  "Access-Control-Allow-Origin" : "*"
 };
-app.use(cors(corsConfig));
+
+// middlewares
+app.use(cors(corsOptions));
 app.use(express.json());
 // app.use((req, res, next) => {
 //   res.header("Access-Control-Allow-Origin", "*"); // Allow requests from all origins (for testing)
@@ -55,35 +55,35 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
 
     const database = client.db("PlacesDB");
     const continentsCollections = database.collection("Continents");
     const userdb = client.db("UsersDB");
     const usersCollection = userdb.collection("users");
 
-    app.get("/api/places", async (req, res) => {
-      const { query } = req.query;
+    // app.get("/api/places", async (req, res) => {
+    //   const { query } = req.query;
 
-      try {
-        const response = await axios.get(
-          "https://maps.googleapis.com/maps/api/place/findplacefromtext/json",
-          {
-            params: {
-              input: "dh",
-              inputtype: "textquery",
-              fields: "formatted_address,name,geometry",
-              key: process.env.PLACES_API,
-            },
-          }
-        );
-        res.json(response.data);
-        console.log(response.data);
-      } catch (error) {
-        console.error(error);
-        res.status(500).send("Error fetching places");
-      }
-    });
+    //   try {
+    //     const response = await axios.get(
+    //       "https://maps.googleapis.com/maps/api/place/findplacefromtext/json",
+    //       {
+    //         params: {
+    //           input: "dh",
+    //           inputtype: "textquery",
+    //           fields: "formatted_address,name,geometry",
+    //           key: process.env.PLACES_API,
+    //         },
+    //       }
+    //     );
+    //     res.json(response.data);
+    //     console.log(response.data);
+    //   } catch (error) {
+    //     console.error(error);
+    //     res.status(500).send("Error fetching places");
+    //   }
+    // });
 
     app.post("/users", async (req, res) => {
       const user = req.body;
@@ -97,9 +97,7 @@ async function run() {
     });
 
     app.get("/api/continents", async (req, res) => {
-      const continents = await continentsCollections
-        .find({}, { projection: { continent: 1, _id: 0 } })
-        .toArray();
+      const continents = await continentsCollections.find({}, { projection: { continent: 1, _id: 0 } }).toArray();
       res.json(continents);
     });
 
@@ -121,6 +119,90 @@ async function run() {
       res.json(result?.countries[0].cities);
     });
 
+    const askAssistant = async (prompt) => {
+      // const assistant = await openai.beta.assistants.create({
+      //   name: "Travel Planner",
+      //   instructions:
+      //     "You are a personal math tutor. Write and run code to answer math questions.",
+      //   tools: [{ type: "code_interpreter" }],
+      //   model: "gpt-4o",
+      // });
+      const thread = await openai.beta.threads.create();
+      const message = await openai.beta.threads.messages.create(thread.id, {
+        role: "user",
+        content: prompt,
+      });
+
+      let run = await openai.beta.threads.runs.createAndPoll(thread.id, {
+        assistant_id: process.env.ASSISTANTS_ID,
+        instructions:
+          "Please address the user as Jane Doe. The user has a premium account.",
+      });
+
+      // console.log("run" ,run)
+      let responses = [];
+      if (run.status === "completed") {
+        const messages = await openai.beta.threads.messages.list(run.thread_id);
+        for (const message of messages.data.reverse()) {
+          console.log(`${message.role} > ${message.content[0].text.value}`);
+          responses.push(message.content[0].text.value);
+          console.log("main", responses);
+        }
+      } else {
+        console.log(run.status);
+      }
+      return responses[1];
+    };
+
+    // app.post('/ask', async (req, res) => {
+    //     const prompt = req.body.prompt;
+    //     console.log(prompt)
+    //     const response = await askChatGPT(prompt);
+    //     res.send(response);
+    // });
+
+    // Function to interact with ChatGPT
+    app.post("/ask", async (req, res) => {
+      const prompt = req.body.prompt;
+      console.log(prompt);
+      const cities = ["london", "paris", "rome"];
+      const response = await askAssistant(prompt);
+      // const imageResponse = await generateImages(cities);
+      // console.log(imageResponse);
+      const responses = { response: response };
+      res.send(responses);
+      console.log("heo", responses);
+    });
+
+    // Function to interact with ChatGPT
+    async function askChatGPT(prompt) {
+      const completion = await openai.chat.completions.create({
+        messages: [{ role: "system", content: prompt }],
+        model: "gpt-4o",
+        response_format: { type: "json_object" },
+      });
+
+      console.log(completion.choices[0]);
+      return completion.choices[0];
+    }
+
+    const generateImages = async (cities) => {
+      // Use Promise.all to wait for all async operations to complete
+      const imageUrls = await Promise.all(
+        cities.map(async (city) => {
+          const response = await openai.images.generate({
+            model: "dall-e-3",
+            prompt: `Generate an image of ${city}`,
+            n: 1,
+            size: "1024x1024",
+          });
+          return response.data[0].url; // Return the image URL
+        })
+      );
+
+      return imageUrls; // Return the array of image URLs
+    };
+
     // const main = async () => {
     // const assistant = await openai.beta.assistants.create({
     //   name: "Travel Planner",
@@ -135,7 +217,7 @@ async function run() {
 
     // console.log(run)
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
+    // await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
@@ -150,89 +232,7 @@ app.get("/", async (req, res) => {
   res.send("Server is running");
 });
 
-const askAssistant = async (prompt) => {
-  // const assistant = await openai.beta.assistants.create({
-  //   name: "Travel Planner",
-  //   instructions:
-  //     "You are a personal math tutor. Write and run code to answer math questions.",
-  //   tools: [{ type: "code_interpreter" }],
-  //   model: "gpt-4o",
-  // });
-  const thread = await openai.beta.threads.create();
-  const message = await openai.beta.threads.messages.create(thread.id, {
-    role: "user",
-    content: prompt,
-  });
 
-  let run = await openai.beta.threads.runs.createAndPoll(thread.id, {
-    assistant_id: process.env.ASSISTANTS_ID,
-    instructions:
-      "Please address the user as Jane Doe. The user has a premium account.",
-  });
-
-  // console.log("run" ,run)
-  let responses = [];
-  if (run.status === "completed") {
-    const messages = await openai.beta.threads.messages.list(run.thread_id);
-    for (const message of messages.data.reverse()) {
-      console.log(`${message.role} > ${message.content[0].text.value}`);
-      responses.push(message.content[0].text.value);
-      console.log("main", responses);
-    }
-  } else {
-    console.log(run.status);
-  }
-  return responses[1];
-};
-
-// app.post('/ask', async (req, res) => {
-//     const prompt = req.body.prompt;
-//     console.log(prompt)
-//     const response = await askChatGPT(prompt);
-//     res.send(response);
-// });
-
-// Function to interact with ChatGPT
-app.post("/ask", async (req, res) => {
-  const prompt = req.body.prompt;
-  console.log(prompt);
-  const cities = ["london", "paris", "rome"];
-  const response = await askAssistant(prompt);
-  // const imageResponse = await generateImages(cities);
-  // console.log(imageResponse);
-  const responses = { response: response };
-  res.send(responses);
-  console.log("heo", responses);
-});
-
-// Function to interact with ChatGPT
-async function askChatGPT(prompt) {
-  const completion = await openai.chat.completions.create({
-    messages: [{ role: "system", content: prompt }],
-    model: "gpt-4o",
-    response_format: { type: "json_object" },
-  });
-
-  console.log(completion.choices[0]);
-  return completion.choices[0];
-}
-
-const generateImages = async (cities) => {
-  // Use Promise.all to wait for all async operations to complete
-  const imageUrls = await Promise.all(
-    cities.map(async (city) => {
-      const response = await openai.images.generate({
-        model: "dall-e-3",
-        prompt: `Generate an image of ${city}`,
-        n: 1,
-        size: "1024x1024",
-      });
-      return response.data[0].url; // Return the image URL
-    })
-  );
-
-  return imageUrls; // Return the array of image URLs
-};
 
 // Start the server
 app.listen(port, () => {
