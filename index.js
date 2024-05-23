@@ -27,7 +27,9 @@ const openai = new OpenAI({ apiKey: process.env.OPEN_AI_API_KEY });
 const corsConfig = {
   origin: ["http://localhost:5173"],
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-  credentials: true,
+  // credentials: true,
+  optionSuccessStatus: 200,
+  "Access-Control-Allow-Origin" : "*"
 };
 app.use(cors(corsConfig));
 app.use(express.json());
@@ -60,25 +62,28 @@ async function run() {
     const userdb = client.db("UsersDB");
     const usersCollection = userdb.collection("users");
 
-    app.get('/api/places', async (req, res) => {
+    app.get("/api/places", async (req, res) => {
       const { query } = req.query;
-  
+
       try {
-          const response = await axios.get('https://maps.googleapis.com/maps/api/place/findplacefromtext/json', {
-              params: {
-                  input: 'dh',
-                  inputtype: 'textquery',
-                  fields: 'formatted_address,name,geometry',
-                  key: '',
-              },
-          });
-          res.json(response.data);
-          console.log(response.data)
+        const response = await axios.get(
+          "https://maps.googleapis.com/maps/api/place/findplacefromtext/json",
+          {
+            params: {
+              input: "dh",
+              inputtype: "textquery",
+              fields: "formatted_address,name,geometry",
+              key: process.env.PLACES_API,
+            },
+          }
+        );
+        res.json(response.data);
+        console.log(response.data);
       } catch (error) {
-          console.error(error);
-          res.status(500).send('Error fetching places');
+        console.error(error);
+        res.status(500).send("Error fetching places");
       }
-  });
+    });
 
     app.post("/users", async (req, res) => {
       const user = req.body;
@@ -117,38 +122,16 @@ async function run() {
     });
 
     // const main = async () => {
-    const assistant = await openai.beta.assistants.create({
-      name: "Travel Planner",
-      instructions:
-        "You are a personal math tutor. Write and run code to answer math questions.",
-      tools: [{ type: "code_interpreter" }],
-      model: "gpt-4o",
-    });
+    // const assistant = await openai.beta.assistants.create({
+    //   name: "Travel Planner",
+    //   instructions:
+    //     "You are a personal math tutor. Write and run code to answer math questions.",
+    //   tools: [{ type: "code_interpreter" }],
+    //   model: "gpt-4o",
+    // });
     // };
 
     // main();
-
-    const thread = await openai.beta.threads.create();
-
-    const message = await openai.beta.threads.messages.create(thread.id, {
-      role: "user",
-      content: "I need to solve the equation `3x + 11 = 14`. Can you help me?",
-    });
-
-    let run = await openai.beta.threads.runs.createAndPoll(thread.id, {
-      assistant_id: assistant.id,
-      instructions:
-        "Please address the user as Jane Doe. The user has a premium account.",
-    });
-
-    if (run.status === "completed") {
-      const messages = await openai.beta.threads.messages.list(run.thread_id);
-      for (const message of messages.data.reverse()) {
-        console.log(`${message.role} > ${message.content[0].text.value}`);
-      }
-    } else {
-      console.log(run.status);
-    }
 
     // console.log(run)
     // Send a ping to confirm a successful connection
@@ -167,6 +150,41 @@ app.get("/", async (req, res) => {
   res.send("Server is running");
 });
 
+const askAssistant = async (prompt) => {
+  // const assistant = await openai.beta.assistants.create({
+  //   name: "Travel Planner",
+  //   instructions:
+  //     "You are a personal math tutor. Write and run code to answer math questions.",
+  //   tools: [{ type: "code_interpreter" }],
+  //   model: "gpt-4o",
+  // });
+  const thread = await openai.beta.threads.create();
+  const message = await openai.beta.threads.messages.create(thread.id, {
+    role: "user",
+    content: prompt,
+  });
+
+  let run = await openai.beta.threads.runs.createAndPoll(thread.id, {
+    assistant_id: process.env.ASSISTANTS_ID,
+    instructions:
+      "Please address the user as Jane Doe. The user has a premium account.",
+  });
+
+  // console.log("run" ,run)
+  let responses = [];
+  if (run.status === "completed") {
+    const messages = await openai.beta.threads.messages.list(run.thread_id);
+    for (const message of messages.data.reverse()) {
+      console.log(`${message.role} > ${message.content[0].text.value}`);
+      responses.push(message.content[0].text.value);
+      console.log("main", responses);
+    }
+  } else {
+    console.log(run.status);
+  }
+  return responses[1];
+};
+
 // app.post('/ask', async (req, res) => {
 //     const prompt = req.body.prompt;
 //     console.log(prompt)
@@ -179,12 +197,12 @@ app.post("/ask", async (req, res) => {
   const prompt = req.body.prompt;
   console.log(prompt);
   const cities = ["london", "paris", "rome"];
-  const response = await askChatGPT(prompt);
-  const imageResponse = await generateImages(cities);
-  console.log(imageResponse);
-  const responses = { response: response, imageResponse: imageResponse };
+  const response = await askAssistant(prompt);
+  // const imageResponse = await generateImages(cities);
+  // console.log(imageResponse);
+  const responses = { response: response };
   res.send(responses);
-  console.log(responses);
+  console.log("heo", responses);
 });
 
 // Function to interact with ChatGPT
