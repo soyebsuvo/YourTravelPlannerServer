@@ -9,6 +9,7 @@ const OpenAI = require("openai");
 //
 
 const openai = new OpenAI({ apiKey: process.env.OPEN_AI_API_KEY });
+const openai2 = new OpenAI({ apiKey: process.env.OPEN_AI_API_KEY2 });
 
 // Serve static files from the 'public' directory
 // app.use(express.static('public'));
@@ -26,8 +27,7 @@ const openai = new OpenAI({ apiKey: process.env.OPEN_AI_API_KEY });
 
 const corsOptions = {
   origin: "*",
-  credentials: true,
-  optionSuccessStatus: 200,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
 };
 
 // middlewares
@@ -40,7 +40,7 @@ app.use(express.json());
 
 // Endpoint to handle requests from frontend
 
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.k09zxzp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -56,9 +56,11 @@ async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
     // await client.connect();
+    // client.connect();
 
     const database = client.db("PlacesDB");
     const continentsCollections = database.collection("Continents");
+    const placesCollections = database.collection("Places");
     const userdb = client.db("UsersDB");
     const usersCollection = userdb.collection("users");
 
@@ -96,8 +98,45 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/places", async (req, res) => {
+      const places = await placesCollections.find().toArray();
+      res.json(places);
+    });
+
+    app.get("/continents", async (req, res) => {
+      const continents = await continentsCollections.find().toArray();
+      res.json(continents);
+    });
+
+    app.get("/continent/:place", async (req, res) => {
+      const place = req.params.place.toLowerCase();
+      const allContinents = await continentsCollections.find().toArray();
+
+      // Find the continent that contains the country or city matching the place
+      const continent = allContinents.find(
+        (cont) =>
+          cont?.continent.toLowerCase().includes(place) ||
+          cont?.countries?.some(
+            (country) =>
+              country.name.toLowerCase().includes(place) ||
+              country.cities.some((city) => city.toLowerCase().includes(place))
+          )
+      );
+      console.log(continent);
+
+      if (continent) {
+        res.json(continent);
+      } else {
+        res
+          .status(404)
+          .json({ error: "Continent not found for the given place" });
+      }
+    });
+
     app.get("/api/continents", async (req, res) => {
-      const continents = await continentsCollections.find({}, { projection: { continent: 1, _id: 0 } }).toArray();
+      const continents = await continentsCollections
+        .find({}, { projection: { continent: 1, _id: 0 } })
+        .toArray();
       res.json(continents);
     });
 
@@ -136,7 +175,7 @@ async function run() {
       let run = await openai.beta.threads.runs.createAndPoll(thread.id, {
         assistant_id: process.env.ASSISTANTS_ID,
         instructions:
-          "Please address the user as Jane Doe. The user has a premium account.",
+          "Please remember the previous conversation of an user",
       });
 
       // console.log("run" ,run)
@@ -163,45 +202,70 @@ async function run() {
 
     // Function to interact with ChatGPT
     app.post("/ask", async (req, res) => {
-      const prompt = req.body.prompt;
-      console.log(prompt);
-      const cities = ["london", "paris", "rome"];
-      const response = await askAssistant(prompt);
-      // const imageResponse = await generateImages(cities);
-      // console.log(imageResponse);
-      const responses = { response: response };
-      res.send(responses);
-      console.log("heo", responses);
+      try {
+        const prompt = req.body.prompt;
+        console.log("prompt : ", prompt);
+        // const cities = ["london", "paris", "rome"];
+        const response = await askAssistant(prompt);
+        // const imageResponse = await generateImages(cities);
+        // console.log(imageResponse);
+        const responses = { response: response };
+        res.send(responses);
+        console.log("heo", responses);
+      } catch (error) {
+        console.log("Error from /ask", error);
+      }
     });
 
-    // Function to interact with ChatGPT
-    async function askChatGPT(prompt) {
-      const completion = await openai.chat.completions.create({
-        messages: [{ role: "system", content: prompt }],
+    app.post("/chat", async (req, res) => {
+      try {
+        const text = req.body.text;
+        console.log(text)
+        const messageRes = await chatFunction(text);
+        res.send(messageRes);
+        console.log(messageRes)
+      } catch (error) {
+        console.log("Chat" , error)
+      }
+    });
+
+    const chatFunction = async (text) => {
+      const completion = await openai2.chat.completions.create({
+        messages: [{ role: "system", content: text }],
         model: "gpt-4o",
-        response_format: { type: "json_object" },
       });
 
-      console.log(completion.choices[0]);
       return completion.choices[0];
-    }
-
-    const generateImages = async (cities) => {
-      // Use Promise.all to wait for all async operations to complete
-      const imageUrls = await Promise.all(
-        cities.map(async (city) => {
-          const response = await openai.images.generate({
-            model: "dall-e-3",
-            prompt: `Generate an image of ${city}`,
-            n: 1,
-            size: "1024x1024",
-          });
-          return response.data[0].url; // Return the image URL
-        })
-      );
-
-      return imageUrls; // Return the array of image URLs
     };
+
+    // Function to interact with ChatGPT
+    // async function askChatGPT(prompt) {
+    //   const completion = await openai.chat.completions.create({
+    //     messages: [{ role: "system", content: prompt }],
+    //     model: "gpt-4o",
+    //     response_format: { type: "json_object" },
+    //   });
+
+    //   console.log(completion.choices[0]);
+    //   return completion.choices[0];
+    // }
+
+    // const generateImages = async (cities) => {
+    //   // Use Promise.all to wait for all async operations to complete
+    //   const imageUrls = await Promise.all(
+    //     cities.map(async (city) => {
+    //       const response = await openai.images.generate({
+    //         model: "dall-e-3",
+    //         prompt: `Generate an image of ${city}`,
+    //         n: 1,
+    //         size: "1024x1024",
+    //       });
+    //       return response.data[0].url; // Return the image URL
+    //     })
+    //   );
+
+    //   return imageUrls; // Return the array of image URLs
+    // };
 
     // const main = async () => {
     // const assistant = await openai.beta.assistants.create({
@@ -218,6 +282,7 @@ async function run() {
     // console.log(run)
     // Send a ping to confirm a successful connection
     // await client.db("admin").command({ ping: 1 });
+    // await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
@@ -231,8 +296,6 @@ run().catch(console.dir);
 app.get("/", async (req, res) => {
   res.send("Server is running");
 });
-
-
 
 // Start the server
 app.listen(port, () => {
