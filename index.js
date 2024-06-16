@@ -5,7 +5,10 @@ const cors = require("cors");
 const app = express();
 const port = process.env.PORT || 3000;
 const OpenAI = require("openai");
+// import { createClient } from 'pexels';
+const { createClient } = require("pexels");
 
+const pexels = createClient(process.env.PEXELS_API_KEY);
 //
 
 const openai = new OpenAI({ apiKey: process.env.OPEN_AI_API_KEY });
@@ -63,6 +66,23 @@ async function run() {
     const placesCollections = database.collection("Places");
     const userdb = client.db("UsersDB");
     const usersCollection = userdb.collection("users");
+
+    // const generateImages = async (city) => {
+    //   const query = `${city} city`;
+
+    //   pexels.photos.search({ query, orientation : "portrait", per_page: 1 }).then((photos) => {
+    //     console.log(photos.photos[0].src.original);
+    //   });
+    // };
+ const generateImages = async (cities) => {
+  const mainResults = await Promise.all(cities.map(async (city) => {
+    const query = `${city} city`;
+    const photos = await pexels.photos.search({ query, orientation: "portrait", per_page: 1 });
+    return photos.photos[0].src.original;
+  }));
+  return mainResults;
+};
+// generateImages(['London', 'Paris', 'Tokyo', 'rome']).then(results => console.log(results));
 
     // app.get("/api/places", async (req, res) => {
     //   const { query } = req.query;
@@ -174,8 +194,7 @@ async function run() {
 
       let run = await openai.beta.threads.runs.createAndPoll(thread.id, {
         assistant_id: process.env.ASSISTANTS_ID,
-        instructions:
-          "Please remember the previous conversation of an user",
+        instructions: "Please remember the previous conversation of an user",
       });
 
       // console.log("run" ,run)
@@ -205,11 +224,11 @@ async function run() {
       try {
         const prompt = req.body.prompt;
         console.log("prompt : ", prompt);
-        // const cities = ["london", "paris", "rome"];
+        const cities = ["london", "paris", "rome"];
         const response = await askAssistant(prompt);
-        // const imageResponse = await generateImages(cities);
-        // console.log(imageResponse);
-        const responses = { response: response };
+        const imageResponse = await generateImages(cities);
+        console.log("hahahaha",imageResponse);
+        const responses = { response: response , imageResponse : imageResponse};
         res.send(responses);
         console.log("heo", responses);
       } catch (error) {
@@ -220,12 +239,12 @@ async function run() {
     app.post("/chat", async (req, res) => {
       try {
         const text = req.body.text;
-        console.log(text)
+        console.log(text);
         const messageRes = await chatFunction(text);
         res.send(messageRes);
-        console.log(messageRes)
+        console.log(messageRes);
       } catch (error) {
-        console.log("Chat" , error)
+        console.log("Chat", error);
       }
     });
 
