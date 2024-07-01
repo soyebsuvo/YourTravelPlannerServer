@@ -66,6 +66,9 @@ async function run() {
     const placesCollections = database.collection("Places");
     const userdb = client.db("UsersDB");
     const usersCollection = userdb.collection("users");
+    const tripsdb = client.db("TripsDB");
+    const savedCollections = tripsdb.collection("saved");
+    const requestedCollections = tripsdb.collection("requested")
 
     // const generateImages = async (city) => {
     //   const query = `${city} city`;
@@ -116,6 +119,25 @@ async function run() {
       }
       const result = await usersCollection.insertOne(user);
       res.send(result);
+    });
+
+    app.get("/user/admin/:email", async (req, res) => {
+      const email = req?.params?.email;
+      const query = { email: email };
+      const user = await usersCollection.findOne(query);
+      if (user) {
+        if (!user?.role) {
+          res.send({ role: null });
+        } else if (user?.role === "agent") {
+          res.send({ role: user?.role });
+        } else if (user?.role === "admin") { 
+          res.send({ role: user?.role });
+        } else {
+          res.send({ message: "unauthorized access" });
+        }
+      } else {
+        res.send({ message: "user not found" });
+      }
     });
 
     app.get("/places", async (req, res) => {
@@ -223,8 +245,9 @@ async function run() {
     app.post("/ask", async (req, res) => {
       try {
         const prompt = req.body.prompt;
+        const cities = req.body.selectedCities;
         console.log("prompt : ", prompt);
-        const cities = ["london", "paris", "rome"];
+        // const cities = ["london", "paris", "rome"];
         const response = await askAssistant(prompt);
         const imageResponse = await generateImages(cities);
         console.log("hahahaha",imageResponse);
@@ -256,6 +279,64 @@ async function run() {
 
       return completion.choices[0];
     };
+
+    app.post("/saved", async (req , res) => {
+      const itinerary = req.body;
+      const result = await savedCollections.insertOne(itinerary);
+      res.send(result);
+    })
+
+    app.post("/requested", async(req , res) => {
+      const itinerary = req.body;
+      const result = await requestedCollections.insertOne(itinerary);
+      res.send(result);
+    })
+
+    app.get("/requested", async (req, res) => {
+      const email = req.query.email;
+      if (!email) {
+        return res.status(400).send({ error: "Email query parameter is required" });
+      }
+    
+      try {
+        const query = { "traveller.email": email };
+        const result = await requestedCollections.find(query).toArray();
+        res.send(result);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ error: "An error occurred while fetching the data" });
+      }
+    });
+    app.get("/saved", async (req, res) => {
+      const email = req.query.email;
+      if (!email) {
+        return res.status(400).send({ error: "Email query parameter is required" });
+      }
+    
+      try {
+        const query = { "traveller.email": email };
+        const result = await savedCollections.find(query).toArray();
+        res.send(result);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ error: "An error occurred while fetching the data" });
+      }
+    });
+
+
+    app.delete("/requested/:id" , async ( req , res) => {
+      const id = req.params.id;
+      const query = { _id : new ObjectId(id)}
+      const result = await requestedCollections.deleteOne(query);
+      res.send(result);
+    })
+    app.delete("/saved/:id" , async ( req , res) => {
+      const id = req.params.id;
+      const query = { _id : new ObjectId(id)}
+      const result = await savedCollections.deleteOne(query);
+      res.send(result);
+    })
+
 
     // Function to interact with ChatGPT
     // async function askChatGPT(prompt) {
