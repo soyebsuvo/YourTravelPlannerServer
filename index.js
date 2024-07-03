@@ -1,3 +1,4 @@
+/* jshint esversion: 8 */
 const express = require("express");
 const axios = require("axios");
 require("dotenv").config();
@@ -79,7 +80,7 @@ async function run() {
     // };
  const generateImages = async (cities) => {
   const mainResults = await Promise.all(cities.map(async (city) => {
-    const query = `${city} city`;
+    const query = `${city} tour`;
     const photos = await pexels.photos.search({ query, orientation: "portrait", per_page: 1 });
     return photos.photos[0].src.original;
   }));
@@ -292,6 +293,55 @@ async function run() {
       res.send(result);
     })
 
+    app.patch("/saved/:id", async (req , res) => {
+      const id = req.params.id;
+      const filter = { _id : new ObjectId(id)};
+      const options = { upsert: true };
+      const updateDoc = {
+        $set: {
+          request : true
+        },
+      };
+      const result = await savedCollections.updateOne(
+        filter,
+        updateDoc,
+        options
+      );
+      res.send(result);
+    })
+    app.patch("/requestedToAccept/:id", async (req , res) => {
+      const id = req.params.id;
+      const filter = { _id : new ObjectId(id)};
+      const options = { upsert: true };
+      const updateDoc = {
+        $set: {
+          status : "accepted"
+        },
+      };
+      const result = await requestedCollections.updateOne(
+        filter,
+        updateDoc,
+        options
+      );
+      res.send(result);
+    })
+    app.patch("/requestedToReject/:id", async (req , res) => {
+      const id = req.params.id;
+      const filter = { _id : new ObjectId(id)};
+      const options = { upsert: true };
+      const updateDoc = {
+        $set: {
+          status : "rejected"
+        },
+      };
+      const result = await requestedCollections.updateOne(
+        filter,
+        updateDoc,
+        options
+      );
+      res.send(result);
+    })
+
     app.get("/requested", async (req, res) => {
       const email = req.query.email;
       if (!email) {
@@ -301,6 +351,16 @@ async function run() {
       try {
         const query = { "traveller.email": email };
         const result = await requestedCollections.find(query).toArray();
+        res.send(result);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ error: "An error occurred while fetching the data" });
+      }
+    });
+    app.get("/requestedbids", async (req, res) => {
+          
+      try {
+        const result = await requestedCollections.find().toArray();
         res.send(result);
       } catch (error) {
         console.error(error);
@@ -335,6 +395,12 @@ async function run() {
       const query = { _id : new ObjectId(id)}
       const result = await savedCollections.deleteOne(query);
       res.send(result);
+    })
+
+    app.get("/isexist/:id", async (req , res ) => {
+      const id = req.params.id;
+      const query = { _id : new ObjectId(id)};
+      const isExist = await requestedCollections.findOne
     })
 
 
