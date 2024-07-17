@@ -69,7 +69,7 @@ async function run() {
     const usersCollection = userdb.collection("users");
     const tripsdb = client.db("TripsDB");
     const savedCollections = tripsdb.collection("saved");
-    const requestedCollections = tripsdb.collection("requested")
+    const requestedCollections = tripsdb.collection("requested");
 
     // const generateImages = async (city) => {
     //   const query = `${city} city`;
@@ -78,15 +78,21 @@ async function run() {
     //     console.log(photos.photos[0].src.original);
     //   });
     // };
- const generateImages = async (cities) => {
-  const mainResults = await Promise.all(cities.map(async (city) => {
-    const query = `${city} tour`;
-    const photos = await pexels.photos.search({ query, orientation: "portrait", per_page: 1 });
-    return photos.photos[0].src.original;
-  }));
-  return mainResults;
-};
-// generateImages(['London', 'Paris', 'Tokyo', 'rome']).then(results => console.log(results));
+    const generateImages = async (cities) => {
+      const mainResults = await Promise.all(
+        cities.map(async (city) => {
+          const query = `${city} tour`;
+          const photos = await pexels.photos.search({
+            query,
+            orientation: "portrait",
+            per_page: 1,
+          });
+          return photos.photos[0].src.original;
+        })
+      );
+      return mainResults;
+    };
+    // generateImages(['London', 'Paris', 'Tokyo', 'rome']).then(results => console.log(results));
 
     // app.get("/api/places", async (req, res) => {
     //   const { query } = req.query;
@@ -122,6 +128,24 @@ async function run() {
       res.send(result);
     });
 
+    app.patch("/users/:email", async (req, res) => {
+      const phone = req.query.phone;
+      const email = req.params.email;
+      const filter = { email: email };
+      const options = { upsert: true };
+      const updateDoc = {
+        $set: {
+          phone: phone,
+        },
+      };
+      const result = await usersCollection.updateOne(
+        filter,
+        updateDoc,
+        options
+      );
+      req.send(result);
+    });
+
     app.get("/user/admin/:email", async (req, res) => {
       const email = req?.params?.email;
       const query = { email: email };
@@ -131,7 +155,7 @@ async function run() {
           res.send({ role: null });
         } else if (user?.role === "agent") {
           res.send({ role: user?.role });
-        } else if (user?.role === "admin") { 
+        } else if (user?.role === "admin") {
           res.send({ role: user?.role });
         } else {
           res.send({ message: "unauthorized access" });
@@ -251,8 +275,8 @@ async function run() {
         // const cities = ["london", "paris", "rome"];
         const response = await askAssistant(prompt);
         const imageResponse = await generateImages(cities);
-        console.log("hahahaha",imageResponse);
-        const responses = { response: response , imageResponse : imageResponse};
+        console.log("hahahaha", imageResponse);
+        const responses = { response: response, imageResponse: imageResponse };
         res.send(responses);
         console.log("heo", responses);
       } catch (error) {
@@ -281,25 +305,25 @@ async function run() {
       return completion.choices[0];
     };
 
-    app.post("/saved", async (req , res) => {
+    app.post("/saved", async (req, res) => {
       const itinerary = req.body;
       const result = await savedCollections.insertOne(itinerary);
       res.send(result);
-    })
+    });
 
-    app.post("/requested", async(req , res) => {
+    app.post("/requested", async (req, res) => {
       const itinerary = req.body;
       const result = await requestedCollections.insertOne(itinerary);
       res.send(result);
-    })
+    });
 
-    app.patch("/saved/:id", async (req , res) => {
+    app.patch("/saved/:id", async (req, res) => {
       const id = req.params.id;
-      const filter = { _id : new ObjectId(id)};
+      const filter = { _id: new ObjectId(id) };
       const options = { upsert: true };
       const updateDoc = {
         $set: {
-          request : true
+          request: true,
         },
       };
       const result = await savedCollections.updateOne(
@@ -308,14 +332,14 @@ async function run() {
         options
       );
       res.send(result);
-    })
-    app.patch("/requestedToAccept/:id", async (req , res) => {
+    });
+    app.patch("/requestedToAccept/:id", async (req, res) => {
       const id = req.params.id;
-      const filter = { _id : new ObjectId(id)};
+      const filter = { _id: new ObjectId(id) };
       const options = { upsert: true };
       const updateDoc = {
         $set: {
-          status : "accepted"
+          status: "accepted",
         },
       };
       const result = await requestedCollections.updateOne(
@@ -324,14 +348,14 @@ async function run() {
         options
       );
       res.send(result);
-    })
-    app.patch("/requestedToReject/:id", async (req , res) => {
+    });
+    app.patch("/requestedToReject/:id", async (req, res) => {
       const id = req.params.id;
-      const filter = { _id : new ObjectId(id)};
+      const filter = { _id: new ObjectId(id) };
       const options = { upsert: true };
       const updateDoc = {
         $set: {
-          status : "rejected"
+          status: "rejected",
         },
       };
       const result = await requestedCollections.updateOne(
@@ -340,69 +364,100 @@ async function run() {
         options
       );
       res.send(result);
-    })
+    });
 
     app.get("/requested", async (req, res) => {
       const email = req.query.email;
       if (!email) {
-        return res.status(400).send({ error: "Email query parameter is required" });
+        return res
+          .status(400)
+          .send({ error: "Email query parameter is required" });
       }
-    
+
       try {
         const query = { "traveller.email": email };
         const result = await requestedCollections.find(query).toArray();
         res.send(result);
       } catch (error) {
         console.error(error);
-        res.status(500).send({ error: "An error occurred while fetching the data" });
+        res
+          .status(500)
+          .send({ error: "An error occurred while fetching the data" });
       }
     });
     app.get("/requestedbids", async (req, res) => {
-          
       try {
         const result = await requestedCollections.find().toArray();
         res.send(result);
       } catch (error) {
         console.error(error);
-        res.status(500).send({ error: "An error occurred while fetching the data" });
+        res
+          .status(500)
+          .send({ error: "An error occurred while fetching the data" });
+      }
+    });
+    app.get("/requestedbyid", async (req, res) => {
+      const id = req.query.id;
+      if (!id) {
+        return res.status(400).send({ error: "id is required" });
+      }
+
+      try {
+        const query = { _id: new ObjectId(id) };
+        let result = await requestedCollections.find(query).toArray();
+        if(result?.length === 0){
+          result = await savedCollections.find(query).toArray();
+        }
+        if (result.length === 0) {
+          return res.status(404).send({ error: "Itinerary not found" });
+        }
+        console.log(result);
+        res.send(result);
+      } catch (error) {
+        console.error(error);
+        res
+          .status(500)
+          .send({ error: "An error occurred while fetching the data" });
       }
     });
     app.get("/saved", async (req, res) => {
       const email = req.query.email;
       if (!email) {
-        return res.status(400).send({ error: "Email query parameter is required" });
+        return res
+          .status(400)
+          .send({ error: "Email query parameter is required" });
       }
-    
+
       try {
         const query = { "traveller.email": email };
         const result = await savedCollections.find(query).toArray();
         res.send(result);
       } catch (error) {
         console.error(error);
-        res.status(500).send({ error: "An error occurred while fetching the data" });
+        res
+          .status(500)
+          .send({ error: "An error occurred while fetching the data" });
       }
     });
 
-
-    app.delete("/requested/:id" , async ( req , res) => {
+    app.delete("/requested/:id", async (req, res) => {
       const id = req.params.id;
-      const query = { _id : new ObjectId(id)}
+      const query = { _id: new ObjectId(id) };
       const result = await requestedCollections.deleteOne(query);
       res.send(result);
-    })
-    app.delete("/saved/:id" , async ( req , res) => {
+    });
+    app.delete("/saved/:id", async (req, res) => {
       const id = req.params.id;
-      const query = { _id : new ObjectId(id)}
+      const query = { _id: new ObjectId(id) };
       const result = await savedCollections.deleteOne(query);
       res.send(result);
-    })
+    });
 
-    app.get("/isexist/:id", async (req , res ) => {
-      const id = req.params.id;
-      const query = { _id : new ObjectId(id)};
-      const isExist = await requestedCollections.findOne
-    })
-
+    // app.get("/isexist/:id", async (req, res) => {
+    //   const id = req.params.id;
+    //   const query = { _id: new ObjectId(id) };
+    //   const isExist = await requestedCollections.findOne;
+    // });
 
     // Function to interact with ChatGPT
     // async function askChatGPT(prompt) {
