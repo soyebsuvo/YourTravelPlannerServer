@@ -302,7 +302,7 @@ async function run() {
     });
 
     const chatFunction = async (text) => {
-      const completion = await openai2.chat.completions.create({
+      const completion = await openai.chat.completions.create({
         messages: [{ role: "system", content: text }],
         model: "gpt-4o",
       });
@@ -321,6 +321,24 @@ async function run() {
       const result = await requestedCollections.insertOne(itinerary);
       res.send(result);
     });
+    app.patch("/requestedCallback/:id", async (req , res) => {
+      const id = req.params.id;
+      const info = req.body;
+      const filter = { _id: new ObjectId(id) };
+      const options = { upsert: true };
+      const updateDoc = {
+        $set: {
+          callback: info,
+        },
+      };
+      const result = await requestedCollections.updateOne(
+        filter,
+        updateDoc,
+        options
+      );
+      res.send(result);
+      
+    })
 
     app.patch("/saved/:id", async (req, res) => {
       const id = req.params.id;
