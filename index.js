@@ -1,13 +1,20 @@
 /* jshint esversion: 8 */
-const express = require("express");
-const axios = require("axios");
-require("dotenv").config();
-const cors = require("cors");
+import express from "express";
+import axios from "axios";
+import dotenv from "dotenv";
+import cors from "cors";
+import OpenAI from "openai";
+import crypto from 'crypto';
+import { createClient } from "pexels";
+
+import { MongoClient, ServerApiVersion, ObjectId } from "mongodb";
+
+dotenv.config();
+
 const app = express();
 const port = process.env.PORT || 3000;
-const OpenAI = require("openai");
 // import { createClient } from 'pexels';
-const { createClient } = require("pexels");
+//const { createClient } = require("pexels");
 
 const pexels = createClient(process.env.PEXELS_API_KEY);
 //
@@ -44,7 +51,7 @@ app.use(express.json());
 
 // Endpoint to handle requests from frontend
 
-const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+//const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.k09zxzp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -289,26 +296,68 @@ async function run() {
       }
     });
 
-    app.post("/chat", async (req, res) => {
-      try {
-        const text = req.body.text;
-        console.log(text);
-        const messageRes = await chatFunction(text);
-        res.send(messageRes);
-        console.log(messageRes);
-      } catch (error) {
-        console.log("Chat", error);
-      }
-    });
+    const sessionStore = {};
 
-    const chatFunction = async (text) => {
-      const completion = await openai.chat.completions.create({
-        messages: [{ role: "system", content: text }],
-        model: "gpt-4o",
-      });
+// Generate a unique session ID
+function generateSessionId() {
+  return crypto.randomBytes(16).toString('hex');
+}
 
-      return completion.choices[0];
-    };
+
+app.use((req, res, next) => {
+  if (!req.headers['x-session-id']) {
+    // Generate new session ID if not provided
+    req.sessionId = generateSessionId();
+    res.setHeader('x-session-id', req.sessionId);
+    // Initialize conversation history for new session
+    sessionStore[req.sessionId] = [
+      { role: 'system', content: 'You are a helpful assistant.' }
+    ];
+  } else {
+    // Use existing session ID
+    req.sessionId = req.headers['x-session-id'];
+    if (!sessionStore[req.sessionId]) {
+      // Initialize conversation history if session does not exist
+      sessionStore[req.sessionId] = [
+        { role: 'system', content: 'You are a helpful assistant.' }
+      ];
+    }
+  }
+  next();
+});
+
+app.post('/chat', async (req, res) => {
+  try {
+    const text = req.body.text;
+    const sessionId = req.sessionId;
+
+    // Add the user's message to the conversation history
+    sessionStore[sessionId].push({ role: 'user', content: text });
+
+    // Call the chat function with the updated conversation history
+    const messageRes = await chatFunction(sessionStore[sessionId]);
+
+    // Add the assistant's reply to the conversation history
+    sessionStore[sessionId].push({ role: 'assistant', content: messageRes });
+
+    // Send the assistant's reply back to the client
+    res.send(messageRes);
+  } catch (error) {
+    console.log('Chat', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+const chatFunction = async (conversationHistory) => {
+  const completion = await openai.chat.completions.create({
+    messages: conversationHistory, // Send the entire conversation history
+    model: 'gpt-4'
+  });
+
+  // Return the assistant's reply
+  return completion.choices[0].message.content;
+};
+
 
     app.post("/saved", async (req, res) => {
       const itinerary = req.body;
