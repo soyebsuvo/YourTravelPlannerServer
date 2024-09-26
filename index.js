@@ -85,20 +85,60 @@ async function run() {
     //     console.log(photos.photos[0].src.original);
     //   });
     // };
+    // const generateImages = async (cities) => {
+    //   const mainResults = await Promise.all(
+    //     cities.map(async (city) => {
+    //       const query = `${city} tour`;
+    //       const photos = await pexels.photos.search({
+    //         query,
+    //         orientation: "portrait",
+    //         per_page: 1,
+    //       });
+    //       return photos.photos[0].src.original;
+    //     })
+    //   );
+    //   return mainResults;
+    // };
+
     const generateImages = async (cities) => {
+      // Assuming you want to return 4 images per city
+      const numberOfImagesPerCity = 4;
+    
       const mainResults = await Promise.all(
         cities.map(async (city) => {
           const query = `${city} tour`;
           const photos = await pexels.photos.search({
             query,
             orientation: "portrait",
-            per_page: 1,
+            per_page: numberOfImagesPerCity,
           });
-          return photos.photos[0].src.original;
+    
+          // Get the URLs of the images
+          const imageUrls = photos.photos.map(photo => photo.src.original);
+    
+          // Return the image URLs
+          return imageUrls;
         })
       );
+    
       return mainResults;
     };
+    app.post("/generateimages", async (req, res) => {
+      const {cities} = req.body;
+      const results = await generateImages(cities);
+
+      if(results) {
+        const structuredURL = results.map((urlArray, index) => ({
+          images : urlArray.map(url => ({ url }))
+      }));
+      console.log(structuredURL);
+      res.send(structuredURL);
+      }
+
+      else {
+        res.send([]);
+      }
+    })
     // generateImages(['London', 'Paris', 'Tokyo', 'rome']).then(results => console.log(results));
 
     // app.get("/api/places", async (req, res) => {

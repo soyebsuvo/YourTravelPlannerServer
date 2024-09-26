@@ -23,10 +23,16 @@ export const ChatInteractionHandler = async (req, res) => {
 
     req.session.conversationHistory.push({ role: "user", content: userMessage });
 
+    req.session.save((err) => {
+        if (err) {
+            console.error("Error saving session:", err);
+        }
+    });
+
     try
     {
         const completion = await openai.chat.completions.create({
-            model: "gpt-4",
+            model: "gpt-4o-mini",
             messages: req.session.conversationHistory,
         });
 
@@ -42,3 +48,26 @@ export const ChatInteractionHandler = async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 };
+
+export const GPTNonSessionChat = async (req, res) => {
+    const message = req.body.message;
+    
+    if (!message || typeof message !== 'string' || message.trim() === '') {
+        return res.status(400).json({ error: "Invalid message content" });
+    }
+
+    try
+    {
+        const completion = await openai.chat.completions.create({
+            model: "gpt-4", // pricing + performance consideration
+            messages: [{ role: "user", content: message }],
+        });
+
+        const response = completion.choices[0].message.content;
+        res.json({ message: response });
+    }
+    catch (error) {
+        console.error('Error communicating with OpenAI API:', error.message);
+        res.status(500).json({ error: error.message });
+    }
+}
